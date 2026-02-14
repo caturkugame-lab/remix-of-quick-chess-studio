@@ -35,6 +35,11 @@ type GameRow = {
   last_move_at: string | null;
 };
 
+// Debug logger
+function logSync(action: string, detail?: any) {
+  console.log(`[ChessSync] ${action}`, detail ?? '');
+}
+
 function replayMoves(movesData: any[]): GameState {
   let state = createInitialState();
   for (const m of movesData) {
@@ -45,6 +50,15 @@ function replayMoves(movesData: any[]): GameState {
       (!m.promotion || l.promotion === m.promotion)
     );
     if (lm) state = makeMove(state, lm);
+  }
+  return state;
+}
+
+function applyRowToState(row: GameRow): GameState {
+  let state = replayMoves((row.moves as any[]) || []);
+  if (row.status === 'completed') {
+    state.status = row.result === 'draw' ? 'draw' : 'checkmate';
+    state.winner = row.result === 'white' ? 'w' : row.result === 'black' ? 'b' : null;
   }
   return state;
 }
@@ -65,12 +79,58 @@ export default function Game() {
   const [opponentProfile, setOpponentProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submittingMove, setSubmittingMove] = useState(false);
+
+  // Refs for latest values (avoid stale closures)
   const gameRowRef = useRef<GameRow | null>(null);
+  const moveCountRef = useRef(0);
 
-  // Keep ref in sync
-  useEffect(() => { gameRowRef.current = gameRow; }, [gameRow]);
+  // Sync refs
+  useEffect(() => {
+    gameRowRef.current = gameRow;
+    moveCountRef.current = ((gameRow?.moves as any[]) || []).length;
+  }, [gameRow]);
 
-  // Fetch game & restore state
+  // Apply a game row update, deduplicating by move count
+  const syncFromRow = useCallback((data: GameRow, source: string) => {
+    const incomingMoveCount = ((data.moves as any[]) || []).length;
+    const currentMoveCount = moveCountRef.current;
+
+    // Skip if we already have this state or newer (prevents duplicate/stale updates)
+    if (incomingMoveCount < currentMoveCount) {
+      logSync(`SKIP ${source} (incoming=${incomingMoveCount} < current=${currentMoveCount})`);
+      return;
+    }
+    if (incomingMoveCount === currentMoveCount && data.status === gameRowRef.current?.status) {
+      logSync(`SKIP ${source} (same move count and status)`);
+      return;
+    }
+
+    logSync(`APPLY ${source}`, { moveCount: incomingMoveCount, status: data.status });
+
+    setGameRow(data);
+    setTimeWhite(data.time_white);
+    setTimeBlack(data.time_black);
+    const state = applyRowToState(data);
+    setGameState(state);
+
+    if (data.status === 'completed') {
+      logSync('GAME ENDED', { result: data.result });
+    }
+  }, []);
+
+  // Fetch game from DB (used for initial load, reconnect, and polling fallback)
+  const fetchGameState = useCallback(async (source: string) => {
+    if (!id) return;
+    logSync(`FETCH from DB (${source})`);
+    const { data, error } = await supabase.from('games').select('*').eq('id', id).maybeSingle();
+    if (error || !data) {
+      logSync('FETCH failed', error);
+      return;
+    }
+    syncFromRow(data as GameRow, source);
+  }, [id, syncFromRow]);
+
+  // --- Initial load ---
   useEffect(() => {
     if (!id || !profile) return;
     const fetchGame = async () => {
@@ -81,46 +141,24 @@ export default function Game() {
       setPlayerColor(row.white_player === profile.user_id ? 'w' : 'b');
       setTimeWhite(row.time_white);
       setTimeBlack(row.time_black);
-
-      let state = replayMoves((row.moves as any[]) || []);
-      if (row.status === 'completed') {
-        state.status = row.result === 'draw' ? 'draw' : 'checkmate';
-        state.winner = row.result === 'white' ? 'w' : row.result === 'black' ? 'b' : null;
-      }
-      setGameState(state);
+      moveCountRef.current = ((row.moves as any[]) || []).length;
+      gameRowRef.current = row;
+      setGameState(applyRowToState(row));
 
       const oppId = row.white_player === profile.user_id ? row.black_player : row.white_player;
       const { data: opp } = await supabase.from('profiles').select('*').eq('user_id', oppId).maybeSingle();
       setOpponentProfile(opp);
       setLoading(false);
+      logSync('INITIAL LOAD complete', { moveCount: ((row.moves as any[]) || []).length });
     };
     fetchGame();
   }, [id, profile, navigate]);
 
-  // Reconnect: re-fetch game state when coming back online
-  useEffect(() => {
-    if (connStatus === 'connected' && id && profile && !loading) {
-      const refetch = async () => {
-        const { data } = await supabase.from('games').select('*').eq('id', id).maybeSingle();
-        if (!data) return;
-        const row = data as GameRow;
-        setGameRow(row);
-        setTimeWhite(row.time_white);
-        setTimeBlack(row.time_black);
-        let state = replayMoves((row.moves as any[]) || []);
-        if (row.status === 'completed') {
-          state.status = row.result === 'draw' ? 'draw' : 'checkmate';
-          state.winner = row.result === 'white' ? 'w' : row.result === 'black' ? 'b' : null;
-        }
-        setGameState(state);
-      };
-      refetch();
-    }
-  }, [connStatus]);
-
-  // Realtime listener
+  // --- Realtime subscription ---
   useEffect(() => {
     if (!id) return;
+    logSync('SUBSCRIBE realtime', { gameId: id });
+
     const channel = supabase
       .channel(`game-${id}`)
       .on('postgres_changes', {
@@ -129,20 +167,38 @@ export default function Game() {
         table: 'games',
         filter: `id=eq.${id}`,
       }, (payload) => {
-        const data = payload.new as GameRow;
-        setGameRow(data);
-        setTimeWhite(data.time_white);
-        setTimeBlack(data.time_black);
-        let state = replayMoves((data.moves as any[]) || []);
-        if (data.status === 'completed') {
-          state.status = data.result === 'draw' ? 'draw' : 'checkmate';
-          state.winner = data.result === 'white' ? 'w' : data.result === 'black' ? 'b' : null;
-        }
-        setGameState(state);
+        logSync('REALTIME event received', { moveCount: ((payload.new.moves as any[]) || []).length });
+        syncFromRow(payload.new as GameRow, 'realtime');
       })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [id]);
+      .subscribe((status) => {
+        logSync('CHANNEL status', status);
+      });
+
+    return () => {
+      logSync('UNSUBSCRIBE realtime');
+      supabase.removeChannel(channel);
+    };
+  }, [id, syncFromRow]);
+
+  // --- Polling fallback: every 5s, fetch latest state ---
+  useEffect(() => {
+    if (!id || loading) return;
+    const interval = setInterval(() => {
+      // Only poll if game is still active
+      if (gameRowRef.current?.status === 'active') {
+        fetchGameState('poll-fallback');
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [id, loading, fetchGameState]);
+
+  // --- Reconnect: re-fetch when coming back online ---
+  useEffect(() => {
+    if (connStatus === 'connected' && id && !loading) {
+      logSync('RECONNECT detected, fetching latest state');
+      fetchGameState('reconnect');
+    }
+  }, [connStatus, id, loading, fetchGameState]);
 
   // Timer countdown
   useEffect(() => {
@@ -174,8 +230,9 @@ export default function Game() {
     const scoreW = result === 'white' ? 1 : result === 'draw' ? 0.5 : 0;
     const change = Math.round(K * (scoreW - 0.5));
 
+    logSync('END GAME', { result, eloChange: change });
+
     await submitMove(`end-${gameRow.id}`, async () => {
-      const { data: session } = await supabase.auth.getSession();
       const resp = await supabase.functions.invoke('validate-move', {
         body: {
           gameId: gameRow.id,
@@ -194,6 +251,12 @@ export default function Game() {
   const handleMove = useCallback(async (move: Move) => {
     if (!gameRow || gameRow.status !== 'active' || submittingMove) return;
     setSubmittingMove(true);
+
+    logSync('MOVE sent', {
+      from: `${move.from.row},${move.from.col}`,
+      to: `${move.to.row},${move.to.col}`,
+      promotion: move.promotion,
+    });
 
     // Optimistic update
     const newState = makeMove(gameState, move);
@@ -223,6 +286,7 @@ export default function Game() {
 
     const moveId = `move-${Date.now()}`;
     const success = await submitMove(moveId, async () => {
+      logSync('MOVE submitting to server');
       const resp = await supabase.functions.invoke('validate-move', {
         body: {
           gameId: gameRow.id,
@@ -232,11 +296,12 @@ export default function Game() {
         },
       });
       if (resp.error) throw resp.error;
+      logSync('MOVE validated by server');
     });
 
     if (!success) {
+      logSync('MOVE FAILED, using direct DB fallback');
       toast({ title: 'Move failed to sync. Retrying...', variant: 'destructive' });
-      // Fallback: direct DB update
       const currentMoves = (gameRow.moves as any[]) || [];
       const updateData: any = {
         moves: [...currentMoves, moveData],
@@ -255,8 +320,11 @@ export default function Game() {
       await supabase.from('games').update(updateData).eq('id', gameRow.id);
     }
 
+    // After move is saved, force-fetch to ensure we have server state
+    setTimeout(() => fetchGameState('post-move-verify'), 500);
+
     setSubmittingMove(false);
-  }, [gameRow, gameState, timeWhite, timeBlack, profile, submitMove, submittingMove, toast]);
+  }, [gameRow, gameState, timeWhite, timeBlack, profile, submitMove, submittingMove, toast, fetchGameState]);
 
   const handleResign = async () => {
     const result = playerColor === 'w' ? 'black' : 'white';
