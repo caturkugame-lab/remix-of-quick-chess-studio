@@ -11,6 +11,7 @@ import Play from "./pages/Play";
 import Game from "./pages/Game";
 import History from "./pages/History";
 import Leaderboard from "./pages/Leaderboard";
+import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/game/:id" element={<Game />} />
               <Route path="/history" element={<History />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/install" element={<Install />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

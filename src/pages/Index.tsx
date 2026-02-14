@@ -7,16 +7,28 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Crown, Swords, Trophy, History, BarChart3, Settings, Sun, Moon, LogOut } from 'lucide-react';
+import { Crown, Swords, Trophy, History, BarChart3, Settings, Sun, Moon, LogOut, Download } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 import { getRankTier } from '@/lib/chess-engine';
+import { usePwaInstall } from '@/hooks/use-pwa-install';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Index() {
   const { user, profile, loading, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [recentGames, setRecentGames] = useState<any[]>([]);
   const [gamesLoading, setGamesLoading] = useState(true);
+  const { canInstall, isInstalled, showPrompt, install, dismiss } = usePwaInstall();
+
+  const handleInstall = async () => {
+    const accepted = await install();
+    if (accepted) {
+      toast({ title: '✅ App installed successfully!' });
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user) navigate('/auth');
@@ -117,6 +129,18 @@ export default function Index() {
           </Button>
         </div>
 
+        {/* Install App Button */}
+        {canInstall && !isInstalled && (
+          <Button
+            onClick={handleInstall}
+            variant="outline"
+            className="w-full gap-2 border-primary/30 hover:bg-primary/10"
+          >
+            <Download className="h-4 w-4 text-primary" />
+            Install App
+          </Button>
+        )}
+
         {/* Recent Games */}
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
@@ -186,6 +210,12 @@ export default function Index() {
           ))}
         </div>
       </nav>
+
+      <PwaInstallPrompt
+        show={showPrompt}
+        onInstall={handleInstall}
+        onDismiss={dismiss}
+      />
     </div>
   );
 }
