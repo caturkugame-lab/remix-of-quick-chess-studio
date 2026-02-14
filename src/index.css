@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 20% 96%;
+    --foreground: 30 10% 12%;
+
+    --card: 40 15% 98%;
+    --card-foreground: 30 10% 12%;
+
+    --popover: 40 15% 98%;
+    --popover-foreground: 30 10% 12%;
+
+    --primary: 32 80% 50%;
+    --primary-foreground: 40 20% 98%;
+
+    --secondary: 30 8% 90%;
+    --secondary-foreground: 30 10% 20%;
+
+    --muted: 30 8% 92%;
+    --muted-foreground: 30 6% 45%;
+
+    --accent: 32 60% 45%;
+    --accent-foreground: 40 20% 98%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 30 12% 88%;
+    --input: 30 12% 85%;
+    --ring: 32 80% 50%;
+
+    --radius: 0.75rem;
+
+    --board-light: 35 30% 82%;
+    --board-dark: 32 40% 45%;
+    --board-highlight: 50 90% 65%;
+    --board-move-dot: 32 80% 50%;
+    --board-check: 0 72% 51%;
+
+    --rank-bronze: 30 60% 45%;
+    --rank-silver: 220 10% 65%;
+    --rank-gold: 45 85% 55%;
+    --rank-platinum: 200 30% 60%;
+    --rank-diamond: 200 80% 60%;
+    --rank-master: 280 70% 55%;
+
+    --sidebar-background: 40 15% 95%;
+    --sidebar-foreground: 30 10% 20%;
+    --sidebar-primary: 32 80% 50%;
+    --sidebar-primary-foreground: 40 20% 98%;
+    --sidebar-accent: 30 12% 90%;
+    --sidebar-accent-foreground: 30 10% 20%;
+    --sidebar-border: 30 12% 88%;
+    --sidebar-ring: 32 80% 50%;
+  }
+
+  .dark {
+    --background: 220 20% 8%;
+    --foreground: 40 15% 92%;
+
+    --card: 220 18% 11%;
+    --card-foreground: 40 15% 92%;
+
+    --popover: 220 18% 11%;
+    --popover-foreground: 40 15% 92%;
+
+    --primary: 32 85% 55%;
+    --primary-foreground: 220 20% 8%;
+
+    --secondary: 220 15% 16%;
+    --secondary-foreground: 40 15% 85%;
+
+    --muted: 220 15% 16%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 32 70% 50%;
+    --accent-foreground: 220 20% 8%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 32 85% 55%;
+
+    --board-light: 35 15% 35%;
+    --board-dark: 220 18% 18%;
+    --board-highlight: 50 70% 45%;
+    --board-move-dot: 32 85% 55%;
+    --board-check: 0 62% 45%;
+
+    --sidebar-background: 220 18% 10%;
+    --sidebar-foreground: 40 15% 85%;
+    --sidebar-primary: 32 85% 55%;
+    --sidebar-primary-foreground: 220 20% 8%;
+    --sidebar-accent: 220 15% 14%;
+    --sidebar-accent-foreground: 40 15% 85%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 32 85% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer utilities {
+  .chess-gradient {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  }
+}
